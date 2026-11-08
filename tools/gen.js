@@ -7,16 +7,17 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), os = require('os');
 const { fork } = require('child_process');
 const { solve, stable } = require('./engine.js');
-const MOV = 'LWRXDE';
+const MOV = 'LWRXDEA';
 
 // mekanik unggulan ada di papan?
 function hasFeat(g, f) {
   const s = g.join('');
   return f === 'es' ? s.includes('I') && s.includes('L') : f === 'portal' ? s.split('O').length === 3 : f === 'tombol' ? s.includes('Q') && s.includes('Z')
-    : f === 'petasan' ? s.includes('X') : f === 'tong' ? /[DE]/.test(s) : f === 'batu' ? s.includes('R') : true;
+    : f === 'petasan' ? s.includes('X') : f === 'tong' ? /[DE]/.test(s) : f === 'batu' ? s.includes('R') : f === 'balon' ? s.includes('A') : true;
 }
-const FEATS = ['es', 'portal', 'tombol', 'petasan', 'tong', 'batu'];
+const FEATS = ['es', 'portal', 'tombol', 'balon', 'petasan', 'tong', 'batu'];
 const ONLY = process.env.GEN_ONLY ? process.env.GEN_ONLY.split(',') : null;
+const TMIN = Math.min(8, Math.max(3, +process.env.GEN_TMIN || 4)), SEED = +process.env.GEN_SEED || 0; // opsional (untuk membuat level manual)
 // ---------- pekerja: menghasilkan kandidat sampai waktu habis ----------
 function worker(seed, endAt) {
   let sd = seed | 0;
@@ -27,7 +28,7 @@ function worker(seed, endAt) {
   const FLAV = [
     { n: 'es', w: 3, t: 'LLLWWRBII#<>', ice: 1 }, { n: 'portal', w: 3, t: 'LLWWRB#<>', portal: 1 },
     { n: 'tombol', w: 3, t: 'LLWWRB#<>', gate: 1 }, { n: 'petasan', w: 2, t: 'LWWRBXX#<>' },
-    { n: 'tong', w: 2, t: 'LLWWBDE#<>' }, { n: 'batu', w: 1, t: 'LLWWRRB#<>' }]
+    { n: 'tong', w: 2, t: 'LLWWBDE#<>' }, { n: 'batu', w: 1, t: 'LLWWRRB#<>' }, { n: 'balon', w: 3, t: 'LLWWRBAA#<>', balloon: 1 }]
     .filter(f => !ONLY || ONLY.includes(f.n));
   const FW = []; FLAV.forEach(f => { for (let i = 0; i < f.w; i++) FW.push(f); });
   const at = (L, r, c) => L.g[r][c];
@@ -48,10 +49,12 @@ function worker(seed, endAt) {
     const nc = rnd() < .5 ? 1 : (rnd() < .8 ? 2 : 3), cs = [];
     while (cs.length < nc) { const c = ri(W); if (!cs.includes(c)) cs.push(c); }
     cs.forEach(c => { setc(L, 0, c, 'H'); L.p.push([0, c]); });
-    let nf = 0; while (nf < nc) { const r = rnd() < .6 ? H - 1 : Math.floor(H / 2) + ri(H - 1 - Math.floor(H / 2)), c = ri(W); if (at(L, r, c) === '.') { setc(L, r, c, 'F'); nf++; } }
+    let nf = 0; while (nf < nc) { const r = fl.balloon ? 1 + ri(H - 2) : (rnd() < .6 ? H - 1 : Math.floor(H / 2) + ri(H - 1 - Math.floor(H / 2))), c = ri(W); if (at(L, r, c) === '.') { setc(L, r, c, 'F'); nf++; } }
     if (fl.portal) { setc(L, 2 + ri(3), ri(W), 'O'); const r2 = 5 + ri(H - 7), c2 = ri(W); if (at(L, r2, c2) === '.') setc(L, r2, c2, 'O'); }
     if (fl.gate) { const r = 3 + ri(H - 5), c = ri(W); if (at(L, r, c) === '.') setc(L, r, c, 'Z'); const r2 = 2 + ri(H - 3), c2 = ri(W); if (at(L, r2, c2) === '.') setc(L, r2, c2, 'Q'); }
     if (fl.ice) { for (let i = 0; i < 1 + ri(2); i++) { const r = 2 + ri(H - 4), c = ri(W); if (at(L, r, c) === '.') setc(L, r, c, 'I'); } }
+    // balon: 1–2 balon berpin di bagian bawah kolom kucing, supaya kucing bisa diangkat ke ikan yang ada di atas
+    if (fl.balloon) cs.forEach((c, j) => { if (j < 2 && rnd() < .8) { const r = H - 1 - ri(3); if (at(L, r, c) === '.') { setc(L, r, c, 'A'); L.p.push([r, c]); } } });
     const n = 6 + ri(6); for (let i = 0; i < n; i++) add(L);
     return L;
   }
@@ -75,7 +78,7 @@ function worker(seed, endAt) {
     return { r, sc: -Math.abs(r.par - L.T) * 14 - Math.log2(r.w + 1) * 9 + Math.log2(r.l + 1) * 2 - Math.max(0, objs - 16) * 1.5 - (L.p.length - r.par) * 2 };
   }
   while (Date.now() < endAt) {
-    const T = 4 + ri(5); // target langkah 4..8 supaya kesulitan bervariasi
+    const T = TMIN + ri(9 - TMIN); // target langkah TMIN..8 supaya kesulitan bervariasi
     let cur = init(T), ce = evalL(cur), tries = 0;
     while (!ce && tries++ < 300 && Date.now() < endAt) { cur = init(T); ce = evalL(cur); }
     if (!ce) continue;
@@ -122,7 +125,7 @@ const hash = g => crypto.createHash('sha1').update(g.join('|')).digest('hex').sl
 function valid(d) {
   if (!d || !Array.isArray(d.g) || !d.g.length || d.g.length > 16 || !Array.isArray(d.p) || !d.p.length) return false;
   const w = d.g[0].length; if (w < 1 || w > 9) return false;
-  if (d.g.some(r => r.length !== w || !/^[.HFLWRDEB#<>IXOQZ]+$/.test(r))) return false;
+  if (d.g.some(r => r.length !== w || !/^[.HFLWRDEB#<>IXOQZA]+$/.test(r))) return false;
   const s = d.g.join(''), nh = s.split('H').length - 1, nf = s.split('F').length - 1;
   return nh >= 1 && nh <= 4 && nf >= nh && d.p.every(q => q[0] >= 0 && q[0] < d.g.length && q[1] >= 0 && q[1] < w);
 }
@@ -172,7 +175,7 @@ if (process.argv[2] === '--worker') {
   let alive = nw;
   console.log('pekerja', nw, '· waktu', MIN, 'menit · target', COUNT, 'level');
   for (let i = 0; i < nw; i++) {
-    const ch = fork(__filename, ['--worker', String(day * 97 + i * 7919 + 1), String(endAt)]);
+    const ch = fork(__filename, ['--worker', String(day * 97 + i * 7919 + 1 + SEED), String(endAt)]);
     ch.on('message', m => cand.push(m));
     ch.on('exit', () => { if (--alive === 0) finish(); });
   }

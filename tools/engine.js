@@ -1,12 +1,14 @@
 // DIBUAT OTOMATIS oleh scripts/export_engine.js dari www/index.html — jangan diedit manual.
 // Mesin fisika PinPaw (sama persis dengan game) + solver: menghitung jumlah urutan menang/kalah dan langkah minimum.
 'use strict';
-var cells,pins,state,anim,ev,why,fxq=[],mv=[],SEEN=null,shieldOn=false,sim=true,needRebuild=false;
+var cells,pins,state,anim,ev,why,fxq=[],mv=[],SEEN=null,shieldOn=false,sim=true,needRebuild=false,deadAt=null;
 function fx(){} function toast(){}
 function mk(e){var P={move:1,hiss:2,break:2,warp:2,gate:2.2,boom:2.5,lose:3,win:4};if(!ev||P[e]>P[ev])ev=e;}
 function moreCats(r,c){for(var y=0;y<cells.length;y++)for(var x=0;x<cells[y].length;x++)if(cells[y][x]==='H'&&(y!==r||x!==c))return true;return false;}
 function act(ch,r,c,tr,tc){
-  var t=cells[tr][tc],d=tr>r?'dn':(tc>c?'rt':'lf'),k=tr+','+tc;
+  var t=cells[tr][tc],d=tr>r?'dn':(tr<r?'up':(tc>c?'rt':'lf')),k=tr+','+tc;
+  // benda berat / api yang jatuh atau menggelinding ke balon -> balon pecah (bendanya lanjut jatuh di tick berikutnya)
+  if(t==='A'&&'LRDE'.indexOf(ch)>=0){cells[tr][tc]='.';anim[k]='pf';mk('break');fx('break',tr,tc);mv.push({ch:'A',r:tr,c:tc,tr:tr,tc:tc,t:'pop'});return 1;}
   if(t==='O'){
     var po=portalExit(tr,tc);if(!po||cells[po[0]][po[1]]==='O') return 0;
     var res=act(ch,r,c,po[0],po[1]);
@@ -28,14 +30,14 @@ function act(ch,r,c,tr,tc){
   }
   if(shieldOn&&!sim&&(ch==='R'||ch==='D'||ch==='E')&&t==='H'){shieldOn=false;needRebuild=true;cells[r][c]='.';mk('break');fx('break',tr,tc);try{toast('🛡️ Perisai menahan batu!');}catch(e){}return 1;}
   if((ch==='H'&&t==='L')||(ch==='L'&&(t==='H'||t==='F'))){
-    why=(ch==='L'&&t==='F')?'Ikannya hangus!':'Kucing terbakar!';
+    why=(ch==='L'&&t==='F')?'Ikannya hangus!':'Kucing terbakar!';if(!sim)deadAt={t:ch==='H'?'H':t,p:[tr,tc]};
     cells[tr][tc]='L';cells[r][c]='.';state='lose';mk('lose');fx('burn',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'burn'});return 1;
   }
-  if((ch==='D'||ch==='E')&&(t==='H'||t==='F')&&!(shieldOn&&!sim&&t==='H')){why=t==='H'?'Kucing tertabrak tong!':'Ikannya tertabrak tong!';cells[tr][tc]=ch;cells[r][c]='.';state='lose';mk('lose');fx('crush',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'crush'});return 1;}
+  if((ch==='D'||ch==='E')&&(t==='H'||t==='F')&&!(shieldOn&&!sim&&t==='H')){why=t==='H'?'Kucing tertabrak tong!':'Ikannya tertabrak tong!';if(!sim)deadAt={t:t,p:[tr,tc]};cells[tr][tc]=ch;cells[r][c]='.';state='lose';mk('lose');fx('crush',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'crush'});return 1;}
   if(((ch==='D'||ch==='E')&&t==='L')||(ch==='L'&&(t==='D'||t==='E'))){cells[tr][tc]='.';cells[r][c]='.';anim[k]='pf';mk('hiss');fx('steam',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'steam'});return 1;}
   if((ch==='D'||ch==='E')&&t==='B'){cells[tr][tc]='.';cells[r][c]='.';anim[k]='pf';mk('break');fx('break',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'break'});return 1;}
   if(ch==='R'&&t==='B'){cells[tr][tc]='.';cells[r][c]='.';anim[k]='pf';mk('break');fx('break',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'break'});return 1;}
-  if(ch==='R'&&(t==='H'||t==='F')){why=t==='H'?'Kucing tertimpa batu!':'Ikannya tertimpa batu!';cells[tr][tc]='R';cells[r][c]='.';state='lose';mk('lose');fx('crush',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'crush'});return 1;}
+  if(ch==='R'&&(t==='H'||t==='F')){why=t==='H'?'Kucing tertimpa batu!':'Ikannya tertimpa batu!';if(!sim)deadAt={t:t,p:[tr,tc]};cells[tr][tc]='R';cells[r][c]='.';state='lose';mk('lose');fx('crush',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'crush'});return 1;}
   return 0;
 }
 function portalExit(tr,tc){
@@ -50,7 +52,7 @@ function explode(cr,cc){
     var rr=cr+dr,c2=cc+dc;if(rr<0||rr>=cells.length||c2<0||c2>=cells[0].length) continue;
     var x=cells[rr][c2];
     if(x==='H'||x==='F'){if(!hurt||x==='H')hurt=x;continue;}
-    if('BRILWXDE'.indexOf(x)>=0)cells[rr][c2]='.';
+    if('BRILWXDEA'.indexOf(x)>=0)cells[rr][c2]='.';
   }
   fx('boom',cr,cc);mk('boom');
   if(hurt){why=hurt==='H'?'Kucing kena ledakan petasan!':'Ikannya kena ledakan petasan!';state='lose';mk('lose');}
@@ -60,6 +62,7 @@ function tick(){
   for(var r=cells.length-1;r>=0;r--){
     for(var c=0;c<cells[r].length;c++){
       var ch=cells[r][c];
+      if(ch==='A'){if(!pins.has(r+','+c)&&!seen[r+','+c]&&rise(r,c)){moved=true;if(state!=='play')return true;}continue;}
       if('HLWRXDE'.indexOf(ch)<0||pins.has(r+','+c)||seen[r+','+c]) continue;
       var ok=0;
       if(r+1<cells.length) ok=act(ch,r,c,r+1,c);
@@ -87,6 +90,21 @@ function openGates(){
   if(!press||!gs.length) return false;
   gs.forEach(function(g){cells[g[0]][g[1]]='.';anim[g[0]+','+g[1]]='pf';fx('warp',g[0],g[1]);});
   mk('gate');return true;
+}
+function rise(r,c){
+  if(r<1) return 0;
+  var t=cells[r-1][c],k1=(r-1)+',';
+  if(t==='.'){cells[r-1][c]='A';cells[r][c]='.';anim[k1+c]='up';SEEN[k1+c]=1;mk('move');mv.push({ch:'A',r:r,c:c,tr:r-1,tc:c,t:'move'});return 1;}
+  if(t==='L'){cells[r][c]='.';anim[r+','+c]='pf';mk('break');fx('break',r,c);mv.push({ch:'A',r:r,c:c,tr:r,tc:c,t:'pop'});return 1;}
+  if('HWX'.indexOf(t)<0||pins.has(k1+c)||r<2) return 0;
+  var u=cells[r-2][c],k2=(r-2)+','+c,lift=function(){cells[r-1][c]='A';cells[r][c]='.';anim[k1+c]='up';SEEN[k1+c]=1;mv.push({ch:'A',r:r,c:c,tr:r-1,tc:c,t:'move'});};
+  if(u==='.'){cells[r-2][c]=t;anim[k2]='up';SEEN[k2]=1;mv.push({ch:t,r:r-1,c:c,tr:r-2,tc:c,t:'move'});lift();mk('move');return 1;}
+  if(t==='H'&&u==='F'){var more=moreCats(r-1,c);cells[r-2][c]=more?'K':'H';anim[k2]='up';SEEN[k2]=1;mv.push({ch:'H',r:r-1,c:c,tr:r-2,tc:c,t:more?'fed':'win'});lift();fx('confetti',r-2,c);
+    if(more)mk('warp');else{state='win';mk('win');}return 1;}
+  if(t==='H'&&u==='L'){why='Kucing terbakar!';if(!sim)deadAt={t:'H',p:[r-2,c]};cells[r-1][c]='.';state='lose';mk('lose');fx('burn',r-2,c);mv.push({ch:'H',r:r-1,c:c,tr:r-2,tc:c,t:'burn'});return 1;}
+  if(t==='W'&&(u==='L'||u==='X')){cells[r-2][c]='.';anim[k2]='pf';mk('hiss');fx('steam',r-2,c);mv.push({ch:'W',r:r-1,c:c,tr:r-2,tc:c,t:'steam'});lift();return 1;}
+  if(t==='X'&&u==='L'){cells[r-1][c]='.';cells[r-2][c]='.';mv.push({ch:'X',r:r-1,c:c,tr:r-2,tc:c,t:'boom'});explode(r-2,c);return 1;}
+  return 0;
 }
 function stable(g,ps){cells=g.map(function(r){return r.split('');});pins=new Set(ps.map(function(p){return p.join();}));state='play';anim={};mv=[];return !tick()&&state==='play';}
 function solve(g,ps,lk,cap){
