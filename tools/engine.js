@@ -9,6 +9,8 @@ function act(ch,r,c,tr,tc){
   var t=cells[tr][tc],d=tr>r?'dn':(tr<r?'up':(tc>c?'rt':'lf')),k=tr+','+tc;
   // benda berat / api yang jatuh atau menggelinding ke balon -> balon pecah (bendanya lanjut jatuh di tick berikutnya)
   if(t==='A'&&'LRDE'.indexOf(ch)>=0){cells[tr][tc]='.';anim[k]='pf';mk('break');fx('break',tr,tc);mv.push({ch:'A',r:tr,c:tc,tr:tr,tc:tc,t:'pop'});return 1;}
+  // papan rapuh 🪵: batu/tong yang jatuh mematahkannya, api membakarnya; benda itu lanjut menempati petak papan
+  if(t==='J'&&d==='dn'&&'RDEL'.indexOf(ch)>=0){cells[tr][tc]=ch;cells[r][c]='.';anim[k]=d;mk('break');fx(ch==='L'?'burn':'break',tr,tc);mv.push({ch:ch,r:r,c:c,tr:tr,tc:tc,t:'smash'});return 1;}
   if(t==='O'){
     var po=portalExit(tr,tc);if(!po||cells[po[0]][po[1]]==='O') return 0;
     var res=act(ch,r,c,po[0],po[1]);
@@ -52,7 +54,7 @@ function explode(cr,cc){
     var rr=cr+dr,c2=cc+dc;if(rr<0||rr>=cells.length||c2<0||c2>=cells[0].length) continue;
     var x=cells[rr][c2];
     if(x==='H'||x==='F'){if(!hurt||x==='H')hurt=x;continue;}
-    if('BRILWXDEA'.indexOf(x)>=0)cells[rr][c2]='.';
+    if('BRILWXDEAJ'.indexOf(x)>=0)cells[rr][c2]='.';
   }
   fx('boom',cr,cc);mk('boom');
   if(hurt){why=hurt==='H'?'Kucing kena ledakan petasan!':'Ikannya kena ledakan petasan!';state='lose';mk('lose');}

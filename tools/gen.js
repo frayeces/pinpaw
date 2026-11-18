@@ -13,9 +13,9 @@ const MOV = 'LWRXDEA';
 function hasFeat(g, f) {
   const s = g.join('');
   return f === 'es' ? s.includes('I') && s.includes('L') : f === 'portal' ? s.split('O').length === 3 : f === 'tombol' ? s.includes('Q') && s.includes('Z')
-    : f === 'petasan' ? s.includes('X') : f === 'tong' ? /[DE]/.test(s) : f === 'batu' ? s.includes('R') : f === 'balon' ? s.includes('A') : f === 'kipas' ? /[NG]/.test(s) : true;
+    : f === 'petasan' ? s.includes('X') : f === 'tong' ? /[DE]/.test(s) : f === 'batu' ? s.includes('R') : f === 'balon' ? s.includes('A') : f === 'kipas' ? /[NG]/.test(s) : f === 'papan' ? s.includes('J') : true;
 }
-const FEATS = ['es', 'portal', 'tombol', 'balon', 'kipas', 'petasan', 'tong', 'batu'];
+const FEATS = ['es', 'portal', 'tombol', 'balon', 'kipas', 'papan', 'petasan', 'tong', 'batu'];
 const ONLY = process.env.GEN_ONLY ? process.env.GEN_ONLY.split(',') : null;
 const TMIN = Math.min(8, Math.max(3, +process.env.GEN_TMIN || 4)), SEED = +process.env.GEN_SEED || 0; // opsional (untuk membuat level manual)
 // ---------- pekerja: menghasilkan kandidat sampai waktu habis ----------
@@ -28,7 +28,7 @@ function worker(seed, endAt) {
   const FLAV = [
     { n: 'es', w: 3, t: 'LLLWWRBII#<>', ice: 1 }, { n: 'portal', w: 3, t: 'LLWWRB#<>', portal: 1 },
     { n: 'tombol', w: 3, t: 'LLWWRB#<>', gate: 1 }, { n: 'petasan', w: 2, t: 'LWWRBXX#<>' },
-    { n: 'tong', w: 2, t: 'LLWWBDE#<>' }, { n: 'batu', w: 1, t: 'LLWWRRB#<>' }, { n: 'balon', w: 3, t: 'LLWWRBAA#<>', balloon: 1 }, { n: 'kipas', w: 3, t: 'LLWWRBA#<>', fan: 1 }]
+    { n: 'tong', w: 2, t: 'LLWWBDE#<>' }, { n: 'batu', w: 1, t: 'LLWWRRB#<>' }, { n: 'balon', w: 3, t: 'LLWWRBAA#<>', balloon: 1 }, { n: 'kipas', w: 3, t: 'LLWWRBA#<>', fan: 1 }, { n: 'papan', w: 3, t: 'LWWRRRDEJJJ#<>', plank: 1 }]
     .filter(f => !ONLY || ONLY.includes(f.n));
   const FW = []; FLAV.forEach(f => { for (let i = 0; i < f.w; i++) FW.push(f); });
   const at = (L, r, c) => L.g[r][c];
@@ -57,6 +57,8 @@ function worker(seed, endAt) {
     if (fl.balloon) cs.forEach((c, j) => { if (j < 2 && rnd() < .8) { const r = H - 1 - ri(3); if (at(L, r, c) === '.') { setc(L, r, c, 'A'); L.p.push([r, c]); } } });
     // kipas: 1–2 kipas di tepi kiri (meniup ke kanan) / kanan (meniup ke kiri), di baris tengah-bawah
     if (fl.fan) for (let i = 0, m = 1 + ri(2); i < m; i++) { const r = 2 + ri(H - 3), right = rnd() < .5, c = right ? 0 : W - 1; if (at(L, r, c) === '.') setc(L, r, c, right ? 'N' : 'G'); }
+    // papan rapuh: 1–3 papan di bawah-tengah papan, sering tepat di bawah kucing/benda berat
+    if (fl.plank) for (let i = 0, m = 1 + ri(3); i < m; i++) { const r = 2 + ri(H - 3), c = rnd() < .5 ? pick(cs) : ri(W); if (at(L, r, c) === '.') setc(L, r, c, 'J'); }
     const n = 6 + ri(6); for (let i = 0; i < n; i++) add(L);
     return L;
   }
@@ -127,7 +129,7 @@ const hash = g => crypto.createHash('sha1').update(g.join('|')).digest('hex').sl
 function valid(d) {
   if (!d || !Array.isArray(d.g) || !d.g.length || d.g.length > 16 || !Array.isArray(d.p) || !d.p.length) return false;
   const w = d.g[0].length; if (w < 1 || w > 9) return false;
-  if (d.g.some(r => r.length !== w || !/^[.HFLWRDEB#<>IXOQZANG]+$/.test(r))) return false;
+  if (d.g.some(r => r.length !== w || !/^[.HFLWRDEB#<>IXOQZANGJ]+$/.test(r))) return false;
   const s = d.g.join(''), nh = s.split('H').length - 1, nf = s.split('F').length - 1;
   return nh >= 1 && nh <= 4 && nf >= nh && d.p.every(q => q[0] >= 0 && q[0] < d.g.length && q[1] >= 0 && q[1] < w);
 }
