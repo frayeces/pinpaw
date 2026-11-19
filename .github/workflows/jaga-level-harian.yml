@@ -1,0 +1,35 @@
+# Penjaga level harian: jadwal "Level harian" (20:00 UTC) biasanya baru selesai 00:00–03:00 UTC karena antrean GitHub,
+# jadi pukul 06:00 UTC periksa apakah level hari ini (tanggal UTC) sudah terbit.
+# Kalau belum (jadwal GitHub terlewat/terlambat atau generator gagal), jalankan ulang workflow itu lalu tandai gagal
+# supaya GitHub mengirim email peringatan. Kalau workflow itu masih berjalan, tunggu saja (tidak gagal).
+name: Jaga level harian
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC = 13:00 WIB
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cek:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+      - name: Level hari ini sudah ada?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          today=$(date -u +%F)
+          if git log -20 --format=%s | grep -qx "Level bonus harian $today"; then
+            echo "Level $today sudah terbit."; exit 0
+          fi
+          st=$(gh run list --workflow level-harian.yml --limit 1 --json status --jq '.[0].status' || true)
+          if [ "$st" = "in_progress" ] || [ "$st" = "queued" ]; then
+            echo "Level harian masih berjalan ($st)."; exit 0
+          fi
+          echo "::error::Level $today belum terbit (status run terakhir: ${st:-tidak ada}). Menjalankan ulang."
+          gh workflow run level-harian.yml
+          exit 1

@@ -32,7 +32,8 @@ jobs:
         run: node -e "const c=require('./config.json');if(!Array.isArray(c.levels))throw new Error('levels hilang');console.log('level bonus:',c.levels.length)"
       - name: Terbitkan
         run: |
-          if git diff --quiet config.json; then echo "Tidak ada level baru."; exit 0; fi
+          # tidak ada level baru = gagal, supaya GitHub mengirim email peringatan ke pemilik repo
+          if git diff --quiet config.json; then echo "::error::Tidak ada level baru yang lolos hari ini."; exit 1; fi
           git config user.name "pinpaw-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add config.json
