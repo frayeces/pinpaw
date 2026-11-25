@@ -9,7 +9,9 @@
   "text": "semua hadiah koin dari level ×2",
   "from": "2026-11-01",
   "to": "2026-11-30",
-  "mult": 2
+  "mult": 2,
+  "en_name": "Double Fish Week",
+  "en_text": "all level coin rewards ×2"
  },
  "skins": [
   {
